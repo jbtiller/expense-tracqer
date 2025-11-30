@@ -22,10 +22,6 @@
 *.dylib
 *.dll
 
-# Fortran module files
-*.mod
-*.smod
-
 # Compiled Static libraries
 *.lai
 *.la
@@ -39,3 +35,17 @@
 
 # debug information files
 *.dwo
+
+# I use emacs
+*~
+.emacs.desktop*
+
+# Build out-of-tree but in root directory
+build/
+
+# We used cmake-init to build the initial project structure
+cmake-build-*/
+.clangd
+CMakeLists.txt.user
+CMakeUserPresets.json
+compile_commands.json
