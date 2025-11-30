@@ -1,0 +1,475 @@
+-*- fill-column: 100; -*-
+
+2025-11-27
+
+Decided to create an Qt frontend for my simple expense tracker. I need to do some other Qt work, so
+I thought it would be good practice to work on this. I have a current expense tracker in Django, but
+all it really does is support the database and do some queries. I entered all of the data using the
+admin interface. I have to admit it - I'm not going to become a web weenie right now and I still
+want to get use out of the expense tracker. I've already entered 1+ years of data, which is a lot,
+and I want to get some insights from that to ensure my expenses match what I have in my Fidelity
+plan.
+
+The current django app uses sqlite3, which is fine, but it combines all of the tables for all apps,
+including some tutorial apps, into one db file. So, first I have to pull that db over and then get
+ride of the junk I don't need.
+
+I, er, don't know much about sqlite.
+
+Oh, figured out how to have multiple Emacs desktops, which is handy, so I can work on this project
+without polluting the other one. Emacs desktop has grown up and does a good job saving/restoring
+windows, buffers, and frames, so while simple it does what I need. (No need to try writing my own,
+which was going to be a hassle...)
+
+So, how do I interact with a sqlite database from the command line?
+
+So, command line REPL is... "sqlite3". Creative.
+
+$ sqlite3 db.sqlite3
+
+.help shows help. Quite a few options.
+
+.databases - show "attached" databases, just db.sqlite3.
+
+.tables - show tables matching pattern
+
+sqlite> .tables
+auth_group                  expenses_category         
+auth_group_permissions      expenses_payee            
+auth_permission             expenses_payment          
+auth_user                   foodary_eaten             
+auth_user_groups            foodary_meal              
+auth_user_user_permissions  foodary_mealevent         
+django_admin_log            foodary_mealitem          
+django_content_type         foodary_mealitemrole      
+django_migrations           polls_choice              
+django_session              polls_question            
+expenses_account
+
+.schema - show schemas matching pattern
+
+sqlite> .schema expenses*
+
+sqlite> .schema expenses*
+CREATE TABLE IF NOT EXISTS "expenses_account" (
+    "id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "name" varchar(128) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "expenses_category" (
+    "id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "name" varchar(128) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "expenses_payee" (
+    "id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "name" varchar(128) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "expenses_payment" (
+    "id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "paid_date" date NOT NULL,
+    "amount" decimal NOT NULL,
+    "account_id" bigint NOT NULL REFERENCES "expenses_account" ("id") DEFERRABLE INITIALLY DEFERRED,
+    "category_id" bigint NOT NULL REFERENCES "expenses_category" ("id") DEFERRABLE INITIALLY DEFERRED,
+    "payee_id" bigint NOT NULL REFERENCES "expenses_payee" ("id") DEFERRABLE INITIALLY DEFERRED,
+    "paid_year_month" date NOT NULL
+);
+CREATE INDEX "expenses_payment_account_id_2d96e66d" ON "expenses_payment" ("account_id");
+CREATE INDEX "expenses_payment_category_id_82362a95" ON "expenses_payment" ("category_id");
+CREATE INDEX "expenses_payment_payee_id_a6e0a06b" ON "expenses_payment" ("payee_id");
+
+Interesting. Some strange choices here. Why does PRIMARY KEY need NOT NULL - isn't that part of the
+definition of PRIMARY KEY?
+
+And what is all this "deferrable" stuff. Ah, it allows broken references to be ignored during a
+transaction. Then they'll be checked at the end of the transaction. Biggest use is circular
+references, which we don't have. Let's get rid of that.
+
+Also, why are my FKs bigint if the id itself is just int? ::sigh::
+
+CREATE TABLE IF NOT EXISTS "expenses_account" (
+    "id" integer PRIMARY KEY AUTOINCREMENT,
+    "name" varchar(128) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "expenses_category" (
+    "id" integer PRIMARY KEY AUTOINCREMENT,
+    "name" varchar(128) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "expenses_payee" (
+    "id" integer PRIMARY KEY AUTOINCREMENT,
+    "name" varchar(128) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "expenses_payment" (
+    "id" integer PRIMARY KEY AUTOINCREMENT,
+    "paid_date" date NOT NULL,
+    "amount" decimal NOT NULL,
+    "account_id" int NOT NULL REFERENCES "expenses_account" ("id")
+    "category_id" int NOT NULL REFERENCES "expenses_category" ("id")
+    "payee_id" int NOT NULL REFERENCES "expenses_payee" ("id")
+    "paid_year_month" date NOT NULL
+);
+CREATE INDEX "expenses_payment_account_id_2d96e66d" ON "expenses_payment" ("account_id");
+CREATE INDEX "expenses_payment_category_id_82362a95" ON "expenses_payment" ("category_id");
+CREATE INDEX "expenses_payment_payee_id_a6e0a06b" ON "expenses_payment" ("payee_id");
+
+1. Make FKs int not bigint.
+2. Remove NOT NULL from PRIMARY KEYs.
+3. Remove the deferrable stuff.
+4. I don't think I need the paid_year_month column - that was because I didn't know much sql. Not
+much better now, but maybe we can make it work.
+
+OK, we need to:
+
+1. Dump the tables in raw form.
+2. Create a new database file.
+3. Create the new schemas.
+4. Reload the tables in bulk.
+
+Actually, wait. Stop. Let's get the GUI build system going. All of the data can be ported
+later. It's not going anywhere.
+
+I think I can do that.
+
+OK, so cmake-init doesn't directly support qt. There's a tutorial for using CMake and Qt on the Qt
+site. I want to use cmake-init to initialize the repo and then graft the qt stuff on it. How do I do
+that?
+
+I can't find where I initially used cmake-init to create the swtor stuff. ::sigh::
+
+Interestingly, I can't find the cmake-init executable. This is very odd.
+
+I literally can't find cmake-init on the system. Where did it go?
+
+OK, after telling pip3 I was *really* willing to destroy my system and end all life as we know it
+
+$ sudo pip3 install --break-system-packages cmake-init
+
+It ended up in /usr/local/bin/cmake-init
+
+It seems to just rely on pypi-main. I have no idea where that is:
+
+/usr$ find . -maxdepth 7 -name \*pypi\*
+./share/doc/python3-mechanize/examples/pypi.py
+./share/man/man1/pypi-download.1.gz
+./share/man/man1/pypi-install.1.gz
+./bin/pypi-install
+./bin/pypi-download
+
+/bin$ find . -maxdepth 7 -name \*pypi\*
+./pypi-install
+./pypi-download
+
+/usr$ find . -maxdepth 7 -name cmake_init_lib
+./local/lib/python3.12/dist-packages/cmake_init_lib
+
+That's where pypi lives - inside the cmake_init_lib dir:
+
+-rw-r--r-- 1 root root 15500 Nov 28 13:17 cmake_init.py
+-rw-r--r-- 1 root root 52652 Nov 28 13:17 cmake-init.zip
+-rw-r--r-- 1 root root   443 Nov 28 13:17 __init__.py
+-rw-r--r-- 1 root root    68 Nov 28 13:17 __main__.py
+drwxr-xr-x 2 root root  4096 Nov 28 13:17 __pycache__
+-rw-r--r-- 1 root root  2015 Nov 28 13:17 template.py
+
+Fine.
+
+So, you can't use cmake-init to add a structure to a directory - it always creates a new structure
+in a newq directory, which makes sense, I guess.
+
+I'll create the project with cmake-init elsewhere and then look at what it puts in git.
+
+Oh, interesting, it doesn't check anything in. Huh.
+
+So, it has a more fleshed out .gitignore:
+
+
+$ cat .gitignore
+**/.DS_Store
+.idea/
+.vs/
+.vscode/
+build/
+cmake-build-*/
+prefix/
+.clangd
+CMakeLists.txt.user
+CMakeUserPresets.json
+compile_commands.json
+
+Those make sense, although I think some of those things are specific to editors. I'm gonna take over
+what I need, namely:
+
+cmake-build-*/
+.clangd
+CMakeLists.txt.user
+CMakeUserPresets.json
+compile_commands.json
+
+I don't know what "cmake-build-*" is - doesn't show up in my swtor tree. Oh well.
+
+There is a git structure but nothing's been done at all. So I can just ignore that.
+
+~/expense-tracquer$ rm -rf .git
+
+Some of the BUILDING/HACKING, stuff is duplicated because cmake-init was intended to target github. Hmm.
+
+Oh, actually, no. The githug dir just has license and README.md.
+
+This is what I did, essentially:
+
+jason@jason-ThinkPad-T580:~/expense-tracquer$ rm .gitignore
+jason@jason-ThinkPad-T580:~/expense-tracquer$ rm README.md 
+jason@jason-ThinkPad-T580:~/expense-tracquer$ cp -pR docs/ ~/projects/expense-tracqer/
+jason@jason-ThinkPad-T580:~/expense-tracquer$ cp -pr .* * ~/projects/expense-tracqer/
+
+And I manually merged the cmake-init README into my actual project README. trivial.
+
+$ cmake --preset=dev
+Preset CMake variables:
+
+  BUILD_MCSS_DOCS="ON"
+  CMAKE_BUILD_TYPE="Debug"
+  CMAKE_CXX_CLANG_TIDY="clang-tidy;--header-filter=^/home/jason/projects/expense-tracqer/"
+  CMAKE_CXX_CPPCHECK="cppcheck;--inline-suppr"
+  CMAKE_CXX_EXTENSIONS="OFF"
+  CMAKE_CXX_FLAGS="-D_GLIBCXX_ASSERTIONS=1 -fstack-protector-strong -fcf-protection=full -fstack-clash-protection -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wcast-qual -Wformat=2 -Wundef -Werror=float-equal -Wshadow -Wcast-align -Wunused -Wnull-dereference -Wdouble-promotion -Wimplicit-fallthrough -Wextra-semi -Woverloaded-virtual -Wnon-virtual-dtor -Wold-style-cast"
+  CMAKE_CXX_FLAGS_RELEASE="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -O3 -DNDEBUG"
+  CMAKE_CXX_STANDARD="20"
+  CMAKE_CXX_STANDARD_REQUIRED="ON"
+  CMAKE_EXE_LINKER_FLAGS="-Wl,--allow-shlib-undefined,--as-needed,-z,noexecstack,-z,relro,-z,now,-z,nodlopen"
+  CMAKE_EXPORT_COMPILE_COMMANDS="ON"
+  CMAKE_SHARED_LINKER_FLAGS="-Wl,--allow-shlib-undefined,--as-needed,-z,noexecstack,-z,relro,-z,now,-z,nodlopen"
+  expense-tracquer_DEVELOPER_MODE="ON"
+
+-- Configuring done (0.3s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/jason/projects/expense-tracqer/build/dev
+
+$ cmake --build --preset=dev
+[ 20%] Building CXX object CMakeFiles/expense-tracquer_lib.dir/source/lib.cpp.o
+Checking /home/jason/projects/expense-tracqer/source/lib.cpp ...
+Checking /home/jason/projects/expense-tracqer/source/lib.cpp: _GLIBCXX_ASSERTIONS=1...
+[ 20%] Built target expense-tracquer_lib
+[ 60%] Building CXX object CMakeFiles/expense-tracquer_exe.dir/source/main.cpp.o
+[ 60%] Building CXX object test/CMakeFiles/expense-tracquer_test.dir/source/expense-tracquer_test.cpp.o
+Checking /home/jason/projects/expense-tracqer/test/source/expense-tracquer_test.cpp ...
+Checking /home/jason/projects/expense-tracqer/test/source/expense-tracquer_test.cpp: _GLIBCXX_ASSERTIONS=1...
+[ 80%] Linking CXX executable expense-tracquer_test
+[ 80%] Built target expense-tracquer_test
+/home/jason/projects/expense-tracqer/source/main.cpp:2:1: warning: included header string is not used directly [misc-include-cleaner]
+    2 | #include <string>
+      | ^~~~~~~~~~~~~~~~~
+    3 | 
+Checking /home/jason/projects/expense-tracqer/source/main.cpp ...
+Checking /home/jason/projects/expense-tracqer/source/main.cpp: _GLIBCXX_ASSERTIONS=1...
+[100%] Linking CXX executable expense-tracquer
+[100%] Built target expense-tracquer_exe
+
+$ cmake --build --preset=dev && ctest --preset=dev
+[ 20%] Built target expense-tracquer_lib
+[100%] Built target expense-tracquer_test
+[100%] Built target expense-tracquer_exe
+Test project /home/jason/projects/expense-tracqer/build/dev
+    Start 1: expense-tracquer_test
+1/1 Test #1: expense-tracquer_test ............   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.00 sec
+jason@jason-ThinkPad-T580:~/projects/expe
+
+OK, we're looking good.
+
+Lunch time.
+
+Using this: https://doc.qt.io/qt-6/cmake-get-started.html
+
+OK, CMakeLists.txt looks like this:
+
+cmake_minimum_required(VERSION 3.14)
+
+include(cmake/prelude.cmake)
+
+project(
+    expense-tracquer
+    VERSION 0.1.0
+    DESCRIPTION "GUI for entering and exploring my expenses"
+    HOMEPAGE_URL "https://example.com/"
+    LANGUAGES CXX
+)
+
+include(cmake/project-is-top-level.cmake)
+include(cmake/variables.cmake)
+
+find_package(Qt6 REQUIRED COMPONENTS
+    Core
+)
+
+qt_standard_project_setup()
+
+# # ---- Declare library ----
+# 
+# add_library(
+#     expense-tracquer_lib OBJECT
+#     source/lib.cpp
+# )
+# 
+# target_include_directories(
+#     expense-tracquer_lib ${warning_guard}
+#     PUBLIC
+#     "\$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/source>"
+# )
+# 
+# target_compile_features(expense-tracquer_lib PUBLIC cxx_std_20)
+
+# ---- Declare executable ----
+
+qt_add_executable(
+    expense-tracquer_exe
+    source/expense-tracquer.cpp
+)
+add_executable(
+    expense-tracquer::exe
+    ALIAS expense-tracquer_exe
+)
+
+set_property(TARGET expense-tracquer_exe
+    PROPERTY OUTPUT_NAME expense-tracquer
+)
+
+target_compile_features(expense-tracquer_exe
+    PRIVATE cxx_std_20
+)
+
+target_link_libraries(expense-tracquer_exe
+    PRIVATE Qt6::Core
+)
+
+# ---- Install rules ----
+
+if(NOT CMAKE_SKIP_INSTALL_RULES)
+  include(cmake/install-rules.cmake)
+endif()
+
+# ---- Developer mode ----
+
+if(NOT expense-tracquer_DEVELOPER_MODE)
+  return()
+elseif(NOT PROJECT_IS_TOP_LEVEL)
+  message(
+      AUTHOR_WARNING
+      "Developer mode is intended for developers of expense-tracquer"
+  )
+endif()
+
+include(cmake/dev-mode.cmake)
+
+Killed the library stuff - not worth it. However, this fails to produce a make system:
+
+$ cmake --preset=dev
+Preset CMake variables:
+
+  BUILD_MCSS_DOCS="ON"
+  CMAKE_BUILD_TYPE="Debug"
+  CMAKE_CXX_CLANG_TIDY="clang-tidy;--header-filter=^/home/jason/projects/expense-tracqer/"
+  CMAKE_CXX_CPPCHECK="cppcheck;--inline-suppr"
+  CMAKE_CXX_EXTENSIONS="OFF"
+  CMAKE_CXX_FLAGS="-D_GLIBCXX_ASSERTIONS=1 -fstack-protector-strong -fcf-protection=full -fstack-clash-protection -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wcast-qual -Wformat=2 -Wundef -Werror=float-equal -Wshadow -Wcast-align -Wunused -Wnull-dereference -Wdouble-promotion -Wimplicit-fallthrough -Wextra-semi -Woverloaded-virtual -Wnon-virtual-dtor -Wold-style-cast"
+  CMAKE_CXX_FLAGS_RELEASE="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -O3 -DNDEBUG"
+  CMAKE_CXX_STANDARD="20"
+  CMAKE_CXX_STANDARD_REQUIRED="ON"
+  CMAKE_EXE_LINKER_FLAGS="-Wl,--allow-shlib-undefined,--as-needed,-z,noexecstack,-z,relro,-z,now,-z,nodlopen"
+  CMAKE_EXPORT_COMPILE_COMMANDS="ON"
+  CMAKE_SHARED_LINKER_FLAGS="-Wl,--allow-shlib-undefined,--as-needed,-z,noexecstack,-z,relro,-z,now,-z,nodlopen"
+  expense-tracquer_DEVELOPER_MODE="ON"
+
+CMake Error at CMakeLists.txt:16 (find_package):
+  By not providing "FindQt6.cmake" in CMAKE_MODULE_PATH this project has
+  asked CMake to find a package configuration file provided by "Qt6", but
+  CMake did not find one.
+
+  Could not find a package configuration file provided by "Qt6" with any of
+  the following names:
+
+    Qt6Config.cmake
+    qt6-config.cmake
+
+  Add the installation prefix of "Qt6" to CMAKE_PREFIX_PATH or set "Qt6_DIR"
+  to a directory containing one of the above files.  If "Qt6" provides a
+  separate development package or SDK, be sure it has been installed.
+
+
+-- Configuring incomplete, errors occurred!
+
+So, the find_package is failing. Added this:
+
+set(CMAKE_FIND_DEBUG_MODE 1)
+
+and it shows what paths are being searched. Interesting:
+
+  find_package considered the following locations for Qt6's Config module:
+
+    /home/jason/projects/expense-tracqer/build/dev/CMakeFiles/pkgRedirects/Qt6Config.cmake
+    /home/jason/projects/expense-tracqer/build/dev/CMakeFiles/pkgRedirects/qt6-config.cmake
+    /home/jason/.cargo/Qt6Config.cmake
+    /home/jason/.cargo/qt6-config.cmake
+    /usr/local/Qt6Config.cmake
+    /usr/local/qt6-config.cmake
+    /usr/Qt6Config.cmake
+    /usr/qt6-config.cmake
+    /usr/lib/x86_64-linux-gnu/qt6/Qt6Config.cmake
+    /usr/lib/x86_64-linux-gnu/qt6/qt6-config.cmake
+    /usr/lib/qt6/Qt6Config.cmake
+    /usr/lib/qt6/qt6-config.cmake
+    /usr/share/qt6/Qt6Config.cmake
+    /usr/share/qt6/qt6-config.cmake
+    /Qt6Config.cmake
+    /qt6-config.cmake
+    /lib/x86_64-linux-gnu/qt6/Qt6Config.cmake
+    /lib/x86_64-linux-gnu/qt6/qt6-config.cmake
+    /lib/qt6/Qt6Config.cmake
+    /lib/qt6/qt6-config.cmake
+    /usr/games/Qt6Config.cmake
+    /usr/games/qt6-config.cmake
+    /usr/local/games/Qt6Config.cmake
+    /usr/local/games/qt6-config.cmake
+    /snap/Qt6Config.cmake
+    /snap/qt6-config.cmake
+    /home/jason/.local/Qt6Config.cmake
+    /home/jason/.local/qt6-config.cmake
+    /home/jason/go/Qt6Config.cmake
+    /home/jason/go/qt6-config.cmake
+    /opt/Qt6Config.cmake
+    /opt/qt6-config.cmake
+
+Let's look ourselves.
+
+Doesn't appear to be in /usr or /lib. Hmm.
+
+$ find . -maxdepth 6 -iname qt6\*cmake
+$ find . -maxdepth 6 -iname qt6\*cmake
+
+Hmm.
+
+Ah, I didn't have qt6-base-dev installed. Let's see if it works now.
+
+Better.
+
+OK, all going now. Had to remove references to the library everywhere (test cmake, test source,
+etc.) and rename main.cpp to expense_tracquer.cpp, but otherwise all good.
+
+That was just for a console app. Hmm.
+
+Just to make sure it was all copascetic, made the main instantiate an QCoreApplication object. Took
+a lot longer to compile.
+
+OK, now linking and building an app with Widgets. Next is create a simple window. Then put the
+library back in and have it handle dealing with the databaSe.
+
+Building is ridiculously slow and almost all the time is spent analyzing, I have a feeling. What did
+I do in swtor to bring that down?
+
+OMG, build time is still insanely slow. And I see this:
+
+Suppressed 337134 warnings (337132 in non-user code, 2 NOLINT).
+
+Good grief.
+
