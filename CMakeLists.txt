@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 include(cmake/prelude.cmake)
 
 project(
-    expense-tracquer
+    expense_tracquer
     VERSION 0.1.0
     DESCRIPTION "GUI for entering and exploring my expenses"
     HOMEPAGE_URL "https://example.com/"
@@ -19,51 +19,57 @@ find_package(Qt6 REQUIRED COMPONENTS
     Widgets
 )
 
+find_package(SQLite3 REQUIRED)
+
 qt_standard_project_setup()
 
 # ---- Declare library ----
 
 add_library(
-    expense-tracquer_lib OBJECT
+    expense_tracquer_lib OBJECT
     source/expense_lib.cpp
 )
 
 target_include_directories(
-    expense-tracquer_lib ${warning_guard}
-    PUBLIC
-    "\$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/source>"
+    expense_tracquer_lib ${warning_guard}
+    PUBLIC "\$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/source>"
 )
 
-target_compile_features(expense-tracquer_lib PUBLIC cxx_std_20)
+target_link_libraries(expense_tracquer_lib
+    PUBLIC SQLite::SQLite3
+)
+
+target_compile_features(expense_tracquer_lib
+    PUBLIC cxx_std_20)
 
 # ---- Declare executable ----
 
 qt_add_executable(
-  expense-tracquer_exe
+  expense_tracquer_exe
     source/main.cpp
     source/expense_tracquer.cpp
 )
 add_executable(
-    expense-tracquer::exe
-    ALIAS expense-tracquer_exe
+    expense_tracquer::exe
+    ALIAS expense_tracquer_exe
 )
 
-set_property(TARGET expense-tracquer_exe
-    PROPERTY OUTPUT_NAME expense-tracquer
+set_property(TARGET expense_tracquer_exe
+    PROPERTY OUTPUT_NAME expense_tracquer
 )
 
 target_include_directories(
-    expense-tracquer_exe ${warning_guard}
+    expense_tracquer_exe ${warning_guard}
     PUBLIC
     "\$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/source>"
 )
 
-target_compile_features(expense-tracquer_exe
+target_compile_features(expense_tracquer_exe
     PRIVATE cxx_std_20
 )
 
-target_link_libraries(expense-tracquer_exe
-    PRIVATE expense-tracquer_lib
+target_link_libraries(expense_tracquer_exe
+    PRIVATE expense_tracquer_lib
     Qt6::Widgets
 )
 
@@ -75,12 +81,12 @@ endif()
 
 # ---- Developer mode ----
 
-if(NOT expense-tracquer_DEVELOPER_MODE)
+if(NOT expense_tracquer_DEVELOPER_MODE)
   return()
 elseif(NOT PROJECT_IS_TOP_LEVEL)
   message(
       AUTHOR_WARNING
-      "Developer mode is intended for developers of expense-tracquer"
+      "Developer mode is intended for developers of expense_tracquer"
   )
 endif()
 

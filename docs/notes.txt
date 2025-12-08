@@ -473,3 +473,47 @@ Suppressed 337134 warnings (337132 in non-user code, 2 NOLINT).
 
 Good grief.
 
+2025-11-30
+
+OK, committed the initial project structure. Now let's get the database schema in place.
+
+CREATE TABLE IF NOT EXISTS "expenses_account" (
+    "id" integer PRIMARY KEY AUTOINCREMENT,
+    "name" varchar(128) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "expenses_category" (
+    "id" integer PRIMARY KEY AUTOINCREMENT,
+    "name" varchar(128) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "expenses_payee" (
+    "id" integer PRIMARY KEY AUTOINCREMENT,
+    "name" varchar(128) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "expenses_payment" (
+    "id" integer PRIMARY KEY AUTOINCREMENT,
+    "paid_date" int NOT NULL,
+    "amount_cents" int NOT NULL,
+    "account_id" int NOT NULL REFERENCES "expenses_account" ("id")
+    "category_id" int NOT NULL REFERENCES "expenses_category" ("id")
+    "payee_id" int NOT NULL REFERENCES "expenses_payee" ("id")
+    "paid_year_month" date NOT NULL
+);
+CREATE INDEX "expenses_payment_account_id_2d96e66d" ON "expenses_payment" ("account_id");
+CREATE INDEX "expenses_payment_category_id_82362a95" ON "expenses_payment" ("category_id");
+CREATE INDEX "expenses_payment_payee_id_a6e0a06b" ON "expenses_payment" ("payee_id");
+
+Need to install the sqlite3 dev package
+
+$ sudo apt-get install libsqlite3-dev
+
+Good.
+
+2025-12-03
+
+Things are proceeding apace. I have sqlite3 integrated, I can create a database from sql, i can
+manipulate it from the 'sqlite3' command-line program, i can open and interact with it in C++ (well,
+mainly C), and I have some unit tests in place.
+
+I'm finishing up the query code and then the unit tests for that. Then it'll be on to the insert
+code.
+

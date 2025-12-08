@@ -7,10 +7,10 @@ endif()
 
 add_custom_target(
     run-exe
-    COMMAND expense-tracquer_exe
+    COMMAND expense_tracquer_exe
     VERBATIM
 )
-add_dependencies(run-exe expense-tracquer_exe)
+add_dependencies(run-exe expense_tracquer_exe)
 
 option(BUILD_MCSS_DOCS "Build documentation using Doxygen and m.css" OFF)
 if(BUILD_MCSS_DOCS)
